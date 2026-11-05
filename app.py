@@ -136,59 +136,88 @@ def show_solution_check(problem, original, value):
 
 
 def make_problem(level):
-    solution = random.choice([n for n in range(-9, 13) if n != 0])
+    """Randomly generate equations with a known integer solution."""
+    solution = random.choice([n for n in range(-15, 16) if n != 0])
     if level == 1:
         kind = random.choice(["add", "subtract", "multiply", "divide"])
         if kind in ("add", "subtract"):
-            amount = random.randint(2, 12)
+            amount = random.randint(2, 20)
             b = amount if kind == "add" else -amount
-            left = Linear(1, b)
-            right = Linear(0, solution + b)
+            left, right = Linear(1, b), Linear(0, solution + b)
         elif kind == "multiply":
-            a = random.choice([-5, -3, -2, 2, 3, 4, 5])
-            left = Linear(a, 0)
-            right = Linear(0, a * solution)
+            a = random.choice([-9, -8, -7, -6, -5, -4, -3, -2, 2, 3, 4, 5, 6, 7, 8, 9])
+            left, right = Linear(a, 0), Linear(0, a * solution)
         else:
-            divisor = random.choice([2, 3, 4, 5])
-            left = Linear(1 / divisor, 0)
-            right = Linear(0, solution / divisor)
+            divisor = random.randint(2, 10)
+            # Keep the original equation and its solution integers.
+            solution *= divisor
+            left, right = Linear(1 / divisor, 0), Linear(0, solution / divisor)
         return {"left": left, "right": right, "display": None, "solution": solution, "simplify": False}
+
     if level == 2:
-        a = random.choice([-5, -3, -2, 2, 3, 4, 5])
-        b = random.choice([-11, -8, -5, 4, 6, 9, 12])
-        left = Linear(a, b)
-        right = Linear(0, a * solution + b)
+        kind = random.choice(["positive", "negative", "division"])
+        constant = random.choice([n for n in range(-18, 19) if n != 0])
+        if kind == "division":
+            divisor = random.randint(2, 8)
+            solution *= divisor
+            left = Linear(1 / divisor, constant)
+            right = Linear(0, solution / divisor + constant)
+        else:
+            a = random.randint(2, 9) * (-1 if kind == "negative" else 1)
+            left, right = Linear(a, constant), Linear(0, a * solution + constant)
         return {"left": left, "right": right, "display": None, "solution": solution, "simplify": False}
-    kind = random.choice(["variable", "distribute", "combine"])
+
+    kind = random.choice(["variable", "distribute", "combine", "distribute_both"])
     if kind == "variable":
-        right_a = random.choice([1, 2, 3])
-        difference = random.choice([2, 3, 4, 5])
-        left_a = right_a + difference
-        left_b = random.randint(-9, 9)
-        right_b = difference * solution + left_b
-        left, right = Linear(left_a, left_b), Linear(right_a, right_b)
-        display = None
-        simplify = False
+        right_a = random.randint(1, 6)
+        difference = random.randint(2, 7)
+        left_b = random.randint(-15, 15)
+        left, right = Linear(right_a + difference, left_b), Linear(right_a, difference * solution + left_b)
+        display, simplify = None, False
     elif kind == "distribute":
-        factor = random.choice([2, 3, 4])
-        inner = random.choice([-5, -3, 2, 4, 6])
-        left = Linear(factor, factor * inner)
-        right = Linear(0, factor * (solution + inner))
-        display = f"{factor}(x {'+' if inner >= 0 else '−'} {abs(inner)}) = {num(right.c)}"
+        factor = random.randint(2, 7)
+        inner = random.choice([n for n in range(-9, 10) if n != 0])
+        left, right = Linear(factor, factor * inner), Linear(0, factor * (solution + inner))
+        display = f"{factor}(x {'+' if inner > 0 else '−'} {abs(inner)}) = {num(right.c)}"
+        simplify = True
+    elif kind == "combine":
+        a, extra = random.randint(2, 7), random.randint(1, 6)
+        b = random.choice([n for n in range(-13, 14) if n != 0])
+        left, right = Linear(a + extra, b), Linear(0, (a + extra) * solution + b)
+        display = f"{a}x + {extra}x {'+' if b > 0 else '−'} {abs(b)} = {num(right.c)}"
         simplify = True
     else:
-        a, extra = random.choice([(2, 3), (3, 2), (4, 2)])
-        b = random.choice([-5, -2, 3, 6])
-        left = Linear(a + extra, b)
-        right = Linear(0, (a + extra) * solution + b)
-        sign = "+" if b >= 0 else "−"
-        display = f"{a}x + {extra}x {sign} {abs(b)} = {num(right.c)}"
+        factor = random.randint(2, 6)
+        inner = random.choice([n for n in range(-6, 7) if n != 0])
+        right_a = random.randint(1, factor - 1)
+        right_b = (factor - right_a) * solution + factor * inner
+        left, right = Linear(factor, factor * inner), Linear(right_a, right_b)
+        display = (f"{factor}(x {'+' if inner > 0 else '−'} {abs(inner)}) "
+                   f"= {right_a}x {'+' if right_b >= 0 else '−'} {abs(right_b)}")
         simplify = True
     return {"left": left, "right": right, "display": display, "solution": solution, "simplify": simplify}
 
 
+def next_unique_problem(level):
+    """Avoid repeating recently displayed equations during the active session."""
+    if "recent_problems" not in st.session_state:
+        st.session_state.recent_problems = {1: [], 2: [], 3: []}
+    recent = st.session_state.recent_problems[level]
+    candidate = make_problem(level)
+    for _ in range(150):
+        signature = candidate["display"] or equation(candidate["left"], candidate["right"])
+        if signature not in recent:
+            break
+        candidate = make_problem(level)
+    signature = candidate["display"] or equation(candidate["left"], candidate["right"])
+    recent.append(signature)
+    if len(recent) > 100:
+        del recent[:-100]
+    return candidate
+
+
 def fresh(level, mode, position=1):
-    p = make_problem(level)
+    p = next_unique_problem(level)
     st.session_state.problem = p
     st.session_state.current_left = p["left"]
     st.session_state.current_right = p["right"]
@@ -202,7 +231,6 @@ def fresh(level, mode, position=1):
     st.session_state.last_move = None
     st.session_state.mastery_clean = True
     st.session_state.hints_used = 0
-    st.session_state.mastery_clean = True
     for key in ("amount_input", "new_left", "new_right", "simplify_left", "simplify_right", "verify_input"):
         st.session_state.pop(key, None)
 
