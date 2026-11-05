@@ -377,17 +377,17 @@ with main:
     st.markdown(scale_svg(scale_left, scale_right), unsafe_allow_html=True)
 
     if phase == "simplify":
-        st.markdown("### 1 · Simplify first")
-        st.write("Before using inverse operations, distribute or combine like terms.")
+        st.markdown("### Step 1 · Simplify the equation")
+        st.write("Distribute or combine like terms. Then **write the resulting equation**, just as you do after an inverse operation.")
         with st.form("simplify"):
             c1, mid, c2 = st.columns([5, 1, 5])
             with c1:
-                a = st.text_input("New LEFT expression", key="simplify_left", placeholder="e.g. 3x + 6")
+                a = st.text_input("Resulting LEFT side", key="simplify_left", placeholder="e.g. 3x + 6")
             with mid:
                 st.markdown("### =")
             with c2:
-                b = st.text_input("New RIGHT expression", key="simplify_right", placeholder="e.g. 18")
-            confirmed = st.form_submit_button("Check my simplified equation", type="primary")
+                b = st.text_input("Resulting RIGHT side", key="simplify_right", placeholder="e.g. 18")
+            confirmed = st.form_submit_button("Check the resulting equation →", type="primary")
         if confirmed:
             try:
                 a_val, b_val = parse_linear(a), parse_linear(b)
@@ -395,9 +395,11 @@ with main:
                     feedback("error", "Finish distributing before continuing. Remove the parentheses.")
                     st.session_state.mastery_clean = False
                 elif a_val.close(l) and b_val.close(r):
-                    st.session_state.lines.append(("Simplified both expressions", equation(l, r)))
-                    st.session_state.phase = "choose"
-                    feedback("success", "Equivalent equation! Now decide which operation to undo.")
+                    st.session_state.lines.append(("Simplified the equation", equation(l, r)))
+                    st.session_state.step_count += 1
+                    st.session_state.phase = "transition"
+                    st.session_state.last_move = {"before": st.session_state.original_line, "operation": "Simplified the expressions", "after": equation(l, r)}
+                    feedback("success", "Correct. You wrote an equivalent equation. Continue to choose an inverse operation.")
                     st.rerun()
                 else:
                     st.session_state.mastery_clean = False
@@ -429,7 +431,7 @@ with main:
                 amount = st.number_input("By how much?", value=1.0, step=1.0)
             target = "number"
             if level == 3:
-                target = st.radio("What are you moving?", ["number", "x terms"], horizontal=True)
+                target = st.radio("Apply your operation to", ["number", "x terms"], horizontal=True)
             clicked = st.form_submit_button("Show this move on BOTH sides →", type="primary")
         if clicked:
             if abs(amount) < 1e-10:
@@ -449,7 +451,7 @@ with main:
     elif phase == "write":
         symbol, amount, target, expected_l, expected_r = st.session_state.pending
         operation_label = f"{symbol} {num(amount)}{'x' if target == 'x terms' else ''}"
-        st.markdown("### 2 · Apply the same move to EACH side")
+        st.markdown(f"### Step {st.session_state.step_count + 1} · Apply your operation to BOTH sides")
         st.write("The blue labels show your chosen operation. The two sides must get exactly the same treatment.")
         action = html.escape(operation_label)
         st.markdown(
@@ -458,7 +460,7 @@ with main:
             '<div class="equals">=</div>'
             f'<div class="side"><div class="term">{html.escape(expression(r))}</div><div class="action">{action}</div></div>'
             '</div>', unsafe_allow_html=True)
-        st.markdown("### 3 · Write the resulting equation")
+        st.markdown("### Write the resulting equation")
         st.write("Work out each side. Write what is left after the operation.")
         with st.form("write_new_line"):
             lc, equal, rc = st.columns([5, 1, 5])
@@ -524,11 +526,11 @@ with main:
         with st.container(border=True):
             st.caption("YOUR PREVIOUS EQUATION")
             st.markdown(f"#### {last['before']}")
-            st.caption(f"YOU APPLIED {last['operation']} TO BOTH SIDES")
+            st.caption("YOU SIMPLIFIED THE EQUATION" if last["operation"] == "Simplified the expressions" else f"YOU APPLIED {last['operation']} TO BOTH SIDES")
             st.markdown("↓")
             st.caption("YOUR NEW EQUATION — THIS IS WHERE YOU START NEXT")
             st.markdown(f"### :blue[{last['after']}]")
-        st.write("You are **not finished yet**. Look at the new equation and decide what to undo next.")
+        st.write("Look at your resulting equation. Continue to choose the next inverse operation.")
         if st.button(f"Continue to Step {next_step} →", type="primary", use_container_width=True):
             st.session_state.phase = "choose"
             feedback("info", f"Step {next_step}: choose the next inverse operation for {last['after']}.")
