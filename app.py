@@ -418,7 +418,7 @@ with main:
             '<div class="equals">=</div>'
             f'<div class="side"><div class="term">{html.escape(expression(r))}</div><div class="action">{action}</div></div>'
             '</div>', unsafe_allow_html=True)
-        st.markdown("### 3 · Write your NEXT equation")
+        st.markdown("### 3 · Write the resulting equation")
         st.write("Work out each side. Write what is left after the operation.")
         with st.form("write_new_line"):
             lc, equal, rc = st.columns([5, 1, 5])
@@ -566,7 +566,7 @@ with work:
         '<div class="routine"><b>Our routine</b><br>'
         '① Choose an inverse operation<br>'
         '② Do it to <b>BOTH</b> sides<br>'
-        '③ Write the next equation<br>'
+        '③ Write the resulting equation<br>'
         '④ Click <b>Continue to next step</b><br>'
         '⑤ Repeat until x is alone; then check</div>',
         unsafe_allow_html=True)
