@@ -164,6 +164,7 @@ def fresh(level, mode, position=1):
     st.session_state.feedback = ("info", "Choose a useful inverse operation." if not p["simplify"] else "Distribute or combine like terms first.")
     st.session_state.problem_number = position
     st.session_state.step_count = 0
+    st.session_state.mastery_clean = True
     st.session_state.hints_used = 0
     for key in ("amount_input", "new_left", "new_right", "simplify_left", "simplify_right", "verify_input"):
         st.session_state.pop(key, None)
@@ -277,7 +278,7 @@ if st.session_state.get("loaded_for") != identifier:
     fresh(level, mode)
 
 if mode == "Mastery Check":
-    st.info("Mastery: 5 equations, 4 correct to pass. No hints. Every equation must be solved by writing algebraic steps.")
+    st.info("Mastery: 5 equations, 4 correct on the first attempt to pass. No hints. Every equation must be solved by writing algebraic steps.")
     count = st.session_state.problem_number
     st.progress(min((count - 1) / 5, 1.0), text=f"Question {count} of 5 · {st.session_state.mastery_correct} correct so far")
 else:
@@ -331,8 +332,10 @@ with left:
                     feedback("success", "Yes. Your simplified equation is equivalent to the original.")
                     st.rerun()
                 else:
+                    st.session_state.mastery_clean = False
                     feedback("error", "Not equivalent yet. Check the distribution and like terms.")
             except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+                st.session_state.mastery_clean = False
                 feedback("error", "Use a linear expression such as 3x + 6 on each side.")
 
     elif phase == "choose":
@@ -394,6 +397,7 @@ with left:
                     feedback("success", "Both sides are correct. You kept the equation balanced.")
                     st.rerun()
                 elif mode == "Mastery Check":
+                    st.session_state.mastery_clean = False
                     feedback("error", "That line isn't correct yet. Recalculate both sides.")
                 elif left_ok:
                     feedback("error", "Your left side is correct. Recheck the right side.")
@@ -402,6 +406,7 @@ with left:
                 else:
                     feedback("error", "Recalculate both sides using your selected operation.")
             except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+                st.session_state.mastery_clean = False
                 feedback("error", "Enter expressions such as x, 3x, 3x − 5, or 12.")
 
     elif phase == "verify":
@@ -416,17 +421,20 @@ with left:
             if abs(original_l - original_r) < 1e-7 and abs(solution_input - p["solution"]) < 1e-7 and st.session_state.step_count > 0:
                 st.session_state.lines.append(("Verified by substitution", f"{num(original_l)} = {num(original_r)}"))
                 st.session_state.phase = "complete"
-                if mode == "Mastery Check":
+                if mode == "Mastery Check" and st.session_state.mastery_clean:
                     st.session_state.mastery_correct += 1
                 else:
                     st.session_state.practice_solved[level] += 1
                 feedback("success", "Correct! Your solution makes both sides equal.")
                 st.rerun()
             else:
+                st.session_state.mastery_clean = False
                 feedback("error", "That value does not make the original equation balanced. Try again.")
 
     elif phase == "complete":
         st.success("Equation solved! Your steps are recorded on the right.")
+        if mode == "Mastery Check" and not st.session_state.mastery_clean:
+            st.warning("This question was completed with corrections and does not earn a mastery point. You can continue to the next question.")
         if mode == "Practice":
             if st.button("Next practice equation →", type="primary"):
                 fresh(level, mode, st.session_state.problem_number + 1)
