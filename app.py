@@ -100,6 +100,38 @@ def equation(left, right):
     return f"{expression(left)} = {expression(right)}"
 
 
+
+def substituted_equation(original, value):
+    """Display substitution in the original, unsimplified equation."""
+    replacement = f"({num(value)})"
+    # Match the variable x, including when attached to a coefficient like 3x.
+    # Put the value in parentheses to preserve negative signs.
+    return re.sub(r"x", lambda _: replacement, original, flags=re.I)
+
+
+def show_solution_check(problem, original, value):
+    """Show the original equation, substitution, and evaluated sides."""
+    substituted = substituted_equation(original, value)
+    left_result = problem["left"].x * value + problem["left"].c
+    right_result = problem["right"].x * value + problem["right"].c
+
+    st.markdown("#### Check your solution")
+    st.caption("Replace x in the ORIGINAL equation, then simplify each side.")
+    with st.container(border=True):
+        st.markdown("**1. Original equation**")
+        st.markdown(f'<div class="check-math">{html.escape(original)}</div>',
+                    unsafe_allow_html=True)
+        st.markdown(f"**2. Substitute x = {num(value)}**")
+        st.markdown(f'<div class="check-math">{html.escape(substituted)}</div>',
+                    unsafe_allow_html=True)
+        st.markdown("**3. Simplify both sides**")
+        st.markdown(f'<div class="check-math">{num(left_result)} = {num(right_result)}</div>',
+                    unsafe_allow_html=True)
+        if abs(left_result - right_result) < 1e-7:
+            st.success("Both sides are equal. The solution checks!")
+        else:
+            st.error("The two sides do not match. Recheck the solution.")
+
 def make_problem(level):
     solution = random.choice([n for n in range(-9, 13) if n != 0])
     if level == 1:
@@ -229,6 +261,7 @@ font-weight:800;font-size:20px;border-bottom:2px solid #2563eb}
 .work-line {border-bottom:1px solid #cbd5e1;padding:11px 7px}
 .work-line .note {font-size:12px;color:#64748b}
 .work-line .math {font-size:21px;font-weight:700;color:inherit;margin-top:3px;overflow-wrap:anywhere}
+.check-math {font-size:clamp(20px,3vw,28px);font-weight:750;text-align:center;padding:8px 4px;margin:3px 0 14px;color:#1d4ed8;overflow-wrap:anywhere}
 .routine {background:#f1f5f9;border-radius:10px;padding:12px;font-size:14px;color:#334155;line-height:1.9}
 @media(max-width:640px){.equation-action{padding:8px}.equation-action .action{font-size:16px;padding:4px 8px}}
 </style>
@@ -492,11 +525,9 @@ with main:
             st.rerun()
 
     elif phase == "complete":
-        st.success(f"Equation solved: x = {num(st.session_state.current_right.c)}")
-        left_check = p["left"].x * st.session_state.current_right.c + p["left"].c
-        right_check = p["right"].x * st.session_state.current_right.c + p["right"].c
-        st.write(f"Automatic check in the original equation: **{num(left_check)} = {num(right_check)}**")
-        st.caption("You've already written the solution. No need to enter it again.")
+        solved_value = st.session_state.current_right.c
+        st.success(f"Equation solved: x = {num(solved_value)}")
+        show_solution_check(p, st.session_state.original_line, solved_value)
         if mode == "Mastery Check" and not st.session_state.mastery_clean:
             st.warning("You completed the equation with a correction, so this problem does not earn a mastery point.")
         label = "Next practice equation →" if mode == "Practice" else "Next mastery equation →"
