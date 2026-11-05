@@ -110,27 +110,30 @@ def substituted_equation(original, value):
 
 
 def show_solution_check(problem, original, value):
-    """Show the original equation, substitution, and evaluated sides."""
+    """Compact three-line verification beneath the solved equation."""
     substituted = substituted_equation(original, value)
     left_result = problem["left"].x * value + problem["left"].c
     right_result = problem["right"].x * value + problem["right"].c
+    valid = abs(left_result - right_result) < 1e-7
+    rows = (
+        ("Original", original),
+        (f"Substitute x = {num(value)}", substituted),
+        ("Simplify", f"{num(left_result)} = {num(right_result)}"),
+    )
+    body = "".join(
+        f'<div class="check-row"><span class="check-label">{html.escape(label)}</span>'
+        f'<span class="check-equation">{html.escape(math)}</span></div>'
+        for label, math in rows
+    )
+    status = "✓ Both sides match" if valid else "The sides do not match"
+    status_class = "check-valid" if valid else "check-invalid"
+    st.markdown(
+        '<div class="check-panel"><div class="check-title">Check your solution</div>'
+        + body
+        + f'<div class="{status_class}">{status}</div></div>',
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("#### Check your solution")
-    st.caption("Replace x in the ORIGINAL equation, then simplify each side.")
-    with st.container(border=True):
-        st.markdown("**1. Original equation**")
-        st.markdown(f'<div class="check-math">{html.escape(original)}</div>',
-                    unsafe_allow_html=True)
-        st.markdown(f"**2. Substitute x = {num(value)}**")
-        st.markdown(f'<div class="check-math">{html.escape(substituted)}</div>',
-                    unsafe_allow_html=True)
-        st.markdown("**3. Simplify both sides**")
-        st.markdown(f'<div class="check-math">{num(left_result)} = {num(right_result)}</div>',
-                    unsafe_allow_html=True)
-        if abs(left_result - right_result) < 1e-7:
-            st.success("Both sides are equal. The solution checks!")
-        else:
-            st.error("The two sides do not match. Recheck the solution.")
 
 def make_problem(level):
     solution = random.choice([n for n in range(-9, 13) if n != 0])
@@ -261,7 +264,14 @@ font-weight:800;font-size:20px;border-bottom:2px solid #2563eb}
 .work-line {border-bottom:1px solid #cbd5e1;padding:11px 7px}
 .work-line .note {font-size:12px;color:#64748b}
 .work-line .math {font-size:21px;font-weight:700;color:inherit;margin-top:3px;overflow-wrap:anywhere}
-.check-math {font-size:clamp(20px,3vw,28px);font-weight:750;text-align:center;padding:8px 4px;margin:3px 0 14px;color:#1d4ed8;overflow-wrap:anywhere}
+.check-panel {border:1px solid #cbd5e1;border-radius:12px;padding:12px 15px;margin:8px 0 12px}
+.check-title {font-size:15px;font-weight:750;margin-bottom:5px}
+.check-row {display:grid;grid-template-columns:125px minmax(0,1fr);align-items:center;gap:12px;padding:5px 0;border-bottom:1px solid #e2e8f0}
+.check-label {font-size:12px;color:#64748b}
+.check-equation {font-size:clamp(16px,2.2vw,21px);font-weight:650;color:#1d4ed8;overflow-wrap:anywhere}
+.check-valid {color:#15803d;font-size:13px;font-weight:700;margin-top:8px}
+.check-invalid {color:#b91c1c;font-size:13px;font-weight:700;margin-top:8px}
+@media(max-width:540px){.check-row{grid-template-columns:100px minmax(0,1fr);gap:8px}}
 .routine {background:#f1f5f9;border-radius:10px;padding:12px;font-size:14px;color:#334155;line-height:1.9}
 @media(max-width:640px){.equation-action{padding:8px}.equation-action .action{font-size:16px;padding:4px 8px}}
 </style>
