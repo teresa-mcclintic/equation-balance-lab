@@ -278,7 +278,7 @@ font-weight:800;font-size:20px;border-bottom:2px solid #2563eb}
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Equation Balance Lab")
-st.caption("The goal isn't just to find x. It's to show how each move keeps the equation balanced.")
+st.caption("The goal isn't just to find x. It's to show how each operation keeps the equation balanced.")
 
 if "student" not in st.session_state:
     st.session_state.student = ""
@@ -410,7 +410,7 @@ with main:
 
     elif phase == "choose":
         current_step = st.session_state.step_count + 1
-        st.markdown(f"### Step {current_step} · Choose your move")
+        st.markdown(f"### Step {current_step} · Choose an inverse operation")
         if current_step > 1:
             st.info("This is your NEW starting equation. Look at it and choose the next inverse operation.")
         else:
@@ -432,16 +432,16 @@ with main:
             target = "number"
             if level == 3:
                 target = st.radio("Apply your operation to", ["number", "x terms"], horizontal=True)
-            clicked = st.form_submit_button("Show this move on BOTH sides →", type="primary")
+            clicked = st.form_submit_button("Apply this operation to BOTH sides →", type="primary")
         if clicked:
             if abs(amount) < 1e-10:
                 feedback("error", "Choose a nonzero number.")
             elif target == "x terms" and symbol in ("÷", "×"):
-                feedback("error", "Use addition or subtraction to move x terms.")
+                feedback("error", "Use addition or subtraction to eliminate x terms from one side.")
             else:
                 new_l, new_r = operation(l, r, symbol, amount, "x" if target == "x terms" else "number")
                 if new_l.close(l) and new_r.close(r):
-                    feedback("error", "That move changes nothing. Try a useful operation.")
+                    feedback("error", "That operation leaves the equation unchanged. Choose another operation.")
                 else:
                     st.session_state.pending = (symbol, amount, target, new_l, new_r)
                     st.session_state.phase = "write"
@@ -586,7 +586,7 @@ with main:
 
 with work:
     st.markdown("### My algebra steps")
-    st.caption("One line for each move. Every line should be equal to the one before it.")
+    st.caption("Write one resulting equation after each operation. Every equation must remain equivalent.")
     with st.container(border=True):
         for i, (note, line) in enumerate(st.session_state.lines):
             st.markdown(
