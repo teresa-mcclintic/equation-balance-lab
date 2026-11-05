@@ -166,6 +166,7 @@ def fresh(level, mode, position=1):
     st.session_state.step_count = 0
     st.session_state.mastery_clean = True
     st.session_state.hints_used = 0
+    st.session_state.mastery_clean = True
     for key in ("amount_input", "new_left", "new_right", "simplify_left", "simplify_right", "verify_input"):
         st.session_state.pop(key, None)
 
@@ -208,19 +209,32 @@ def scale_svg(left_text, right_text):
     </svg>"""
 
 
+
 st.markdown("""
 <style>
-html,body,[class*="css"],[data-testid="stApp"] {font-family: Inter, Arial, sans-serif;}
-.block-container {max-width:1050px;padding-top:2rem}
-h1,h2,h3,p,label,button,input {font-family:Inter,Arial,sans-serif!important}
-[data-testid="stVerticalBlockBorderWrapper"] {border-radius:14px}
-.eqbig {font-size:clamp(23px,3.3vw,36px);font-weight:800;text-align:center;padding:12px 4px;color:#1d4ed8}
-.step-line {padding:9px 14px;border-bottom:1px solid #cbd5e1;font-size:20px;font-weight:650}
-.step-note {font-size:12px;color:#64748b;font-weight:500}
+html,body,[data-testid="stApp"],button,input,select {font-family:Inter,Arial,sans-serif!important}
+.block-container {max-width:1020px;padding-top:1.4rem}
+h1,h2,h3 {font-family:Inter,Arial,sans-serif!important}
+.eyebrow {font-size:12px;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;color:#64748b}
+.eq-current {font-size:clamp(24px,4vw,36px);font-weight:800;text-align:center;color:#1d4ed8;padding:10px 0}
+.balance-guide {text-align:center;font-size:13px;color:#64748b;margin-bottom:3px}
+.equation-action {display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:center;gap:4px;
+max-width:650px;margin:10px auto;padding:12px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fbff}
+.equation-action .side {text-align:center;min-width:0}
+.equation-action .term {font-size:clamp(19px,3vw,27px);font-weight:750;color:#172554;overflow-wrap:anywhere}
+.equation-action .action {display:inline-block;margin-top:8px;padding:5px 17px;border-radius:8px;background:#dbeafe;color:#1d4ed8;
+font-weight:800;font-size:20px;border-bottom:2px solid #2563eb}
+.equation-action .equals {font-size:25px;text-align:center;font-weight:800;color:#334155}
+.work-line {border-bottom:1px solid #cbd5e1;padding:11px 7px}
+.work-line .note {font-size:12px;color:#64748b}
+.work-line .math {font-size:21px;font-weight:700;color:inherit;margin-top:3px;overflow-wrap:anywhere}
+.routine {background:#f1f5f9;border-radius:10px;padding:12px;font-size:14px;color:#334155;line-height:1.9}
+@media(max-width:640px){.equation-action{padding:8px}.equation-action .action{font-size:16px;padding:4px 8px}}
 </style>
 """, unsafe_allow_html=True)
+
 st.title("⚖️ Equation Balance Lab")
-st.caption("Choose an inverse operation → apply it to BOTH sides → write the new equation → check.")
+st.caption("The goal isn't just to find x. It's to show how each move keeps the equation balanced.")
 
 if "student" not in st.session_state:
     st.session_state.student = ""
@@ -234,224 +248,242 @@ if "mastery_correct" not in st.session_state:
     st.session_state.mastery_correct = 0
 if "mastery_finished" not in st.session_state:
     st.session_state.mastery_finished = False
-if "mastery_awarded" not in st.session_state:
-    st.session_state.mastery_awarded = False
 if "practice_solved" not in st.session_state:
     st.session_state.practice_solved = {1: 0, 2: 0, 3: 0}
 
 if not st.session_state.student:
-    st.subheader("Student sign-in")
-    st.write("Enter your first and last name to begin. No password or school email is needed.")
+    st.subheader("Welcome!")
+    st.write("Enter your first and last name to begin.")
     with st.form("student_name"):
         first = st.text_input("First name")
         last = st.text_input("Last name")
-        entered = st.form_submit_button("Start learning", type="primary")
-    if entered:
+        go = st.form_submit_button("Start learning", type="primary")
+    if go:
         if first.strip() and last.strip():
             st.session_state.student = f"{first.strip()} {last.strip()}"
             st.rerun()
         else:
-            st.warning("Please enter both your first and last name.")
-    st.info("Prototype note: progress is saved only during this browser session. A permanent database and teacher dashboard are planned for a later release.")
+            st.warning("Enter both your first and last name.")
+    st.caption("Progress in this prototype lasts only for your current browser session.")
     st.stop()
 
-top1, top2 = st.columns([3, 1])
+top1, top2 = st.columns([4, 1])
 with top1:
-    st.write(f"**Student:** {st.session_state.student}")
+    st.caption(f"Student: {st.session_state.student}")
 with top2:
     if st.button("Change student"):
-        for k in ("student", "problem", "results", "mastery_correct", "mastery_finished", "mastery_awarded", "practice_solved"):
+        for k in ("student", "loaded_for", "problem", "results", "mastery_correct",
+                  "mastery_finished", "practice_solved"):
             st.session_state.pop(k, None)
         st.rerun()
 
-level_labels = ["One-Step", "Two-Step", "Multi-Step"]
-level = st.segmented_control("Choose a level", options=[1, 2, 3], format_func=lambda x: f"Level {x}: {level_labels[x-1]}", key="level")
+level_names = {1: "One-Step", 2: "Two-Step", 3: "Multi-Step"}
+level = st.segmented_control(
+    "Choose your level", [1, 2, 3],
+    format_func=lambda value: f"Level {value} · {level_names[value]}",
+    key="level"
+)
 if level is None:
     level = 1
-mode = st.radio("Activity", ["Practice", "Mastery Check"], horizontal=True, key="mode")
-identifier = (level, mode)
-if st.session_state.get("loaded_for") != identifier:
-    st.session_state.loaded_for = identifier
+mode = st.radio("Choose an activity", ["Practice", "Mastery Check"], horizontal=True, key="mode")
+
+if st.session_state.get("loaded_for") != (level, mode):
+    st.session_state.loaded_for = (level, mode)
     st.session_state.mastery_correct = 0
     st.session_state.mastery_finished = False
-    st.session_state.mastery_awarded = False
     fresh(level, mode)
 
 if mode == "Mastery Check":
-    st.info("Mastery: 5 equations, 4 correct on the first attempt to pass. No hints. Every equation must be solved by writing algebraic steps.")
-    count = st.session_state.problem_number
-    st.progress(min((count - 1) / 5, 1.0), text=f"Question {count} of 5 · {st.session_state.mastery_correct} correct so far")
+    st.info("Mastery Check · 5 problems · 4 correct on the first try to pass · no hints.")
+    st.progress((st.session_state.problem_number - 1) / 5,
+                text=f"Problem {st.session_state.problem_number} of 5 · {st.session_state.mastery_correct} correct")
 else:
-    st.caption(f"Practice problems solved this session: {st.session_state.practice_solved[level]}")
+    st.caption(f"Practice problems completed: {st.session_state.practice_solved[level]}")
 
 if st.session_state.mastery_finished:
-    correct = st.session_state.mastery_correct
-    passed = correct >= 4
-    st.success(f"Mastery {'achieved' if passed else 'not yet achieved'}: {correct}/5 correct ({correct * 20}%).") if passed else st.warning(f"Mastery not yet achieved: {correct}/5 correct ({correct * 20}%).")
-    st.write("You can retry with a new set of questions.")
-    if st.button("Start another mastery check", type="primary"):
+    score = st.session_state.mastery_correct
+    if score >= 4:
+        st.success(f"Level {level} mastered! You solved {score} out of 5 correctly on the first try.")
+    else:
+        st.warning(f"You solved {score} out of 5 correctly on the first try. Keep practicing and try again.")
+    if st.button("Try a fresh mastery check", type="primary"):
         st.session_state.mastery_correct = 0
         st.session_state.mastery_finished = False
-        st.session_state.mastery_awarded = False
-        fresh(level, mode)
+        fresh(level, mode, 1)
         st.rerun()
     st.stop()
 
-left, right = st.columns([1.2, 0.8], gap="large")
 p = st.session_state.problem
 l = st.session_state.current_left
 r = st.session_state.current_right
 phase = st.session_state.phase
-with left:
-    st.subheader(f"Level {level} · {level_labels[level-1]}")
-    shown_l = p["display"].split("=")[0].strip() if phase == "simplify" and p["display"] else expression(l)
-    shown_r = p["display"].split("=")[1].strip() if phase == "simplify" and p["display"] else expression(r)
-    st.markdown(f'<div class="eqbig">{html.escape(shown_l)} = {html.escape(shown_r)}</div>', unsafe_allow_html=True)
-    st.markdown(scale_svg(shown_l, shown_r), unsafe_allow_html=True)
+
+main, work = st.columns([1.25, 0.75], gap="large")
+with main:
+    st.markdown(f'<div class="eyebrow">Level {level} · {level_names[level]} · '
+                + ("Problem " + str(st.session_state.problem_number))
+                + '</div>', unsafe_allow_html=True)
+    current_text = p["display"] if phase == "simplify" and p["display"] else equation(l, r)
+    st.markdown(f'<div class="eq-current">{html.escape(current_text)}</div>', unsafe_allow_html=True)
+
+    # The scale is the physical picture. The action grid below it is the symbolic picture.
+    scale_left = p["display"].split("=")[0].strip() if phase == "simplify" and p["display"] else expression(l)
+    scale_right = p["display"].split("=")[1].strip() if phase == "simplify" and p["display"] else expression(r)
+    st.markdown('<div class="balance-guide">The two pans represent equal quantities.</div>', unsafe_allow_html=True)
+    st.markdown(scale_svg(scale_left, scale_right), unsafe_allow_html=True)
 
     if phase == "simplify":
-        st.markdown("#### Step 1 · Simplify")
-        st.write("Distribute and/or combine like terms. Write the simplified equation.")
-        with st.form("simplify_form"):
-            a, center, b = st.columns([5, 1, 5])
-            with a:
-                new_l = st.text_input("Left side", key="simplify_left", placeholder="e.g. 3x + 6")
-            with center:
+        st.markdown("### 1 · Simplify first")
+        st.write("Before using inverse operations, distribute or combine like terms.")
+        with st.form("simplify"):
+            c1, mid, c2 = st.columns([5, 1, 5])
+            with c1:
+                a = st.text_input("New LEFT expression", key="simplify_left", placeholder="e.g. 3x + 6")
+            with mid:
                 st.markdown("### =")
-            with b:
-                new_r = st.text_input("Right side", key="simplify_right", placeholder="e.g. 18")
-            submit = st.form_submit_button("Check simplification", type="primary")
-        if submit:
+            with c2:
+                b = st.text_input("New RIGHT expression", key="simplify_right", placeholder="e.g. 18")
+            confirmed = st.form_submit_button("Check my simplified equation", type="primary")
+        if confirmed:
             try:
-                left_t, right_t = parse_linear(new_l), parse_linear(new_r)
-                if "(" in new_l + new_r or ")" in new_l + new_r:
-                    feedback("error", "Finish distributing; the simplified equation shouldn't contain parentheses.")
-                elif left_t.close(l) and right_t.close(r):
-                    st.session_state.lines.append(("Distribute / combine like terms", equation(l, r)))
+                a_val, b_val = parse_linear(a), parse_linear(b)
+                if "(" in a + b or ")" in a + b:
+                    feedback("error", "Finish distributing before continuing. Remove the parentheses.")
+                    st.session_state.mastery_clean = False
+                elif a_val.close(l) and b_val.close(r):
+                    st.session_state.lines.append(("Simplified both expressions", equation(l, r)))
                     st.session_state.phase = "choose"
-                    feedback("success", "Yes. Your simplified equation is equivalent to the original.")
+                    feedback("success", "Equivalent equation! Now decide which operation to undo.")
                     st.rerun()
                 else:
                     st.session_state.mastery_clean = False
-                    feedback("error", "Not equivalent yet. Check the distribution and like terms.")
-            except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+                    feedback("error", "Not equivalent yet. Check distribution and like terms.")
+            except (SyntaxError, ValueError, TypeError, ZeroDivisionError):
                 st.session_state.mastery_clean = False
-                feedback("error", "Use a linear expression such as 3x + 6 on each side.")
+                feedback("error", "Enter expressions such as 3x + 6 and 18.")
 
     elif phase == "choose":
         if isolated(l, r):
             st.session_state.phase = "verify"
             st.rerun()
-        st.markdown("#### Step 1 · Choose an inverse operation")
-        st.write("What should you do to **both** sides?")
-        with st.form("operation_form"):
-            c1, c2, c3 = st.columns([2, 2, 2])
-            with c1:
-                symbol = st.selectbox("Operation", ["−", "+", "÷", "×"])
-            with c2:
-                amount = st.number_input("Number", value=1.0, step=1.0)
-            with c3:
-                target = st.selectbox("Apply to", ["number", "x terms"] if level == 3 else ["number"])
-            apply_clicked = st.form_submit_button("Apply to BOTH sides", type="primary")
-        if apply_clicked:
+        st.markdown("### 1 · Choose your move")
+        st.write("What do you want to **undo** to get x alone?")
+        with st.form("choose_operation"):
+            oc1, oc2 = st.columns([1.1, 1])
+            with oc1:
+                symbol = st.radio("Operation", ["−", "+", "÷", "×"],
+                                  horizontal=True)
+            with oc2:
+                amount = st.number_input("By how much?", value=1.0, step=1.0)
+            target = "number"
+            if level == 3:
+                target = st.radio("What are you moving?", ["number", "x terms"], horizontal=True)
+            clicked = st.form_submit_button("Show this move on BOTH sides →", type="primary")
+        if clicked:
             if abs(amount) < 1e-10:
-                feedback("error", "Use a nonzero value. Division by zero is never allowed.")
-            elif target == "x terms" and symbol in ("×", "÷"):
-                feedback("error", "To move x terms, use addition or subtraction.")
+                feedback("error", "Choose a nonzero number.")
+            elif target == "x terms" and symbol in ("÷", "×"):
+                feedback("error", "Use addition or subtraction to move x terms.")
             else:
-                next_l, next_r = operation(l, r, symbol, amount, "x" if target == "x terms" else "number")
-                if next_l.close(l) and next_r.close(r):
-                    feedback("error", "That operation does not change the equation. Try a useful move.")
+                new_l, new_r = operation(l, r, symbol, amount, "x" if target == "x terms" else "number")
+                if new_l.close(l) and new_r.close(r):
+                    feedback("error", "That move changes nothing. Try a useful operation.")
                 else:
-                    st.session_state.pending = (symbol, amount, target, next_l, next_r)
+                    st.session_state.pending = (symbol, amount, target, new_l, new_r)
                     st.session_state.phase = "write"
-                    feedback("info", "Now calculate the results and write the new equation yourself.")
+                    feedback("info", "Look at the matching blue operations. Now calculate each side yourself.")
                     st.rerun()
 
     elif phase == "write":
         symbol, amount, target, expected_l, expected_r = st.session_state.pending
-        st.markdown("#### Step 2 · Write the new equation")
-        st.markdown(f"**Your move:** {symbol} {num(amount)}{'x' if target == 'x terms' else ''} on **each side**.")
-        st.write("Enter the result on the left and the result on the right.")
-        with st.form("write_form"):
-            a, center, b = st.columns([5, 1, 5])
-            with a:
-                new_l = st.text_input("New left side", key="new_left", placeholder="e.g. 3x")
-            with center:
+        operation_label = f"{symbol} {num(amount)}{'x' if target == 'x terms' else ''}"
+        st.markdown("### 2 · Apply the same move to EACH side")
+        st.write("The blue labels show your chosen operation. The two sides must get exactly the same treatment.")
+        action = html.escape(operation_label)
+        st.markdown(
+            '<div class="equation-action">'
+            f'<div class="side"><div class="term">{html.escape(expression(l))}</div><div class="action">{action}</div></div>'
+            '<div class="equals">=</div>'
+            f'<div class="side"><div class="term">{html.escape(expression(r))}</div><div class="action">{action}</div></div>'
+            '</div>', unsafe_allow_html=True)
+        st.markdown("### 3 · Write your NEXT equation")
+        st.write("Work out each side. Write what is left after the operation.")
+        with st.form("write_new_line"):
+            lc, equal, rc = st.columns([5, 1, 5])
+            with lc:
+                entered_left = st.text_input("New LEFT side", key="new_left",
+                                             placeholder="e.g. 3x")
+            with equal:
                 st.markdown("### =")
-            with b:
-                new_r = st.text_input("New right side", key="new_right", placeholder="e.g. 15")
-            checked = st.form_submit_button("Check my new equation", type="primary")
+            with rc:
+                entered_right = st.text_input("New RIGHT side", key="new_right",
+                                              placeholder="e.g. 15")
+            checked = st.form_submit_button("Check my new equation →", type="primary")
         if checked:
             try:
-                entered_l, entered_r = parse_linear(new_l), parse_linear(new_r)
-                left_ok, right_ok = entered_l.close(expected_l), entered_r.close(expected_r)
-                if left_ok and right_ok:
+                a = parse_linear(entered_left)
+                b = parse_linear(entered_right)
+                if a.close(expected_l) and b.close(expected_r):
                     st.session_state.current_left = expected_l
                     st.session_state.current_right = expected_r
-                    note = f"{symbol} {num(amount)}{'x' if target == 'x terms' else ''} on both sides"
-                    st.session_state.lines.append((note, equation(expected_l, expected_r)))
+                    st.session_state.lines.append((f"{operation_label} on both sides",
+                                                   equation(expected_l, expected_r)))
                     st.session_state.step_count += 1
                     st.session_state.pending = None
                     st.session_state.phase = "verify" if isolated(expected_l, expected_r) else "choose"
-                    feedback("success", "Both sides are correct. You kept the equation balanced.")
+                    feedback("success", "Yes! Both sides changed by the same operation. Your new line is balanced.")
                     st.rerun()
-                elif mode == "Mastery Check":
-                    st.session_state.mastery_clean = False
-                    feedback("error", "That line isn't correct yet. Recalculate both sides.")
-                elif left_ok:
-                    feedback("error", "Your left side is correct. Recheck the right side.")
-                elif right_ok:
-                    feedback("error", "Your right side is correct. Recheck the left side.")
-                else:
-                    feedback("error", "Recalculate both sides using your selected operation.")
-            except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
                 st.session_state.mastery_clean = False
-                feedback("error", "Enter expressions such as x, 3x, 3x − 5, or 12.")
+                if mode == "Practice" and a.close(expected_l):
+                    feedback("error", "The LEFT side is correct. Recalculate the RIGHT side.")
+                elif mode == "Practice" and b.close(expected_r):
+                    feedback("error", "The RIGHT side is correct. Recalculate the LEFT side.")
+                else:
+                    feedback("error", "That line doesn't match the blue operation on both sides. Try again.")
+            except (SyntaxError, ValueError, TypeError, ZeroDivisionError):
+                st.session_state.mastery_clean = False
+                feedback("error", "Type expressions like 3x, x, 15, or 2x − 4.")
 
     elif phase == "verify":
-        st.markdown("#### Final step · Verify")
-        st.write("Enter the value of x, then check it against the **original equation**.")
-        with st.form("verify_form"):
-            solution_input = st.number_input("x =", value=0.0, step=1.0, key="verify_input")
-            verify_clicked = st.form_submit_button("Check my solution", type="primary")
-        if verify_clicked:
-            original_l = p["left"].x * solution_input + p["left"].c
-            original_r = p["right"].x * solution_input + p["right"].c
-            if abs(original_l - original_r) < 1e-7 and abs(solution_input - p["solution"]) < 1e-7 and st.session_state.step_count > 0:
-                st.session_state.lines.append(("Verified by substitution", f"{num(original_l)} = {num(original_r)}"))
+        st.markdown("### 4 · Verify your answer")
+        st.write("You've isolated x. Substitute its value into the **original equation** to prove it balances.")
+        with st.form("verify"):
+            value = st.number_input("x =", value=0.0, step=1.0, key="verify_input")
+            checked = st.form_submit_button("Check by substitution", type="primary")
+        if checked:
+            left_val = p["left"].x * value + p["left"].c
+            right_val = p["right"].x * value + p["right"].c
+            if abs(left_val - right_val) < 1e-7 and abs(value - p["solution"]) < 1e-7 and st.session_state.step_count > 0:
+                st.session_state.lines.append(("Check in original equation",
+                                               f"{num(left_val)} = {num(right_val)}"))
                 st.session_state.phase = "complete"
                 if mode == "Mastery Check" and st.session_state.mastery_clean:
                     st.session_state.mastery_correct += 1
-                else:
+                elif mode == "Practice":
                     st.session_state.practice_solved[level] += 1
-                feedback("success", "Correct! Your solution makes both sides equal.")
+                feedback("success", "Correct. Your substitution shows the two sides are equal.")
                 st.rerun()
             else:
                 st.session_state.mastery_clean = False
-                feedback("error", "That value does not make the original equation balanced. Try again.")
+                feedback("error", "That number does not balance the original equation. Try again.")
 
     elif phase == "complete":
-        st.success("Equation solved! Your steps are recorded on the right.")
+        st.success("Equation solved and checked! Look at the sequence of algebra steps.")
         if mode == "Mastery Check" and not st.session_state.mastery_clean:
-            st.warning("This question was completed with corrections and does not earn a mastery point. You can continue to the next question.")
-        if mode == "Practice":
-            if st.button("Next practice equation →", type="primary"):
+            st.warning("You completed the equation with a correction, so this problem does not earn a mastery point.")
+        label = "Next practice equation →" if mode == "Practice" else "Next mastery equation →"
+        if st.button(label, type="primary"):
+            if mode == "Mastery Check" and st.session_state.problem_number >= 5:
+                st.session_state.mastery_finished = True
+                st.session_state.results[level].append({
+                    "student": st.session_state.student,
+                    "correct": st.session_state.mastery_correct,
+                    "total": 5,
+                    "passed": st.session_state.mastery_correct >= 4
+                })
+            else:
                 fresh(level, mode, st.session_state.problem_number + 1)
-                st.rerun()
-        else:
-            if st.button("Next mastery equation →", type="primary"):
-                if st.session_state.problem_number >= 5:
-                    st.session_state.mastery_finished = True
-                    st.session_state.results[level].append({
-                        "student": st.session_state.student,
-                        "correct": st.session_state.mastery_correct,
-                        "total": 5,
-                        "passed": st.session_state.mastery_correct >= 4,
-                    })
-                else:
-                    fresh(level, mode, st.session_state.problem_number + 1)
-                st.rerun()
+            st.rerun()
 
     kind, message = st.session_state.feedback
     if kind == "success":
@@ -461,34 +493,46 @@ with left:
     else:
         st.info(message)
 
-    if mode == "Practice" and phase not in ("complete",):
-        if st.button("Show a hint"):
-            st.session_state.hints_used += 1
+    if mode == "Practice" and phase in ("simplify", "choose", "write", "verify"):
+        if st.button("Need a hint?"):
             if phase == "simplify":
-                st.info("Multiply the factor outside the parentheses by every term inside, then combine x terms.")
+                st.info("Distribute to every term in the parentheses, then combine the x terms.")
             elif phase == "write":
-                st.info("Apply the operation to each side separately. Then simplify the expression on each side.")
+                st.info("Start with the left expression, apply the blue operation, simplify. Repeat separately on the right.")
             elif phase == "verify":
-                st.info("Substitute your proposed x value into the original equation.")
-            elif abs(r.x) > 1e-7:
-                st.info("There are x terms on both sides. Try subtracting the x term on the right from both sides.")
-            elif abs(l.c) > 1e-7:
-                st.info(f"Undo the constant on the left. Think about the opposite of {'adding' if l.c > 0 else 'subtracting'} {num(abs(l.c))}.")
+                st.info("Replace x in the original equation with the number you found.")
+            elif abs(r.x) > 1e-8:
+                st.info("Try removing the x term from the right by subtracting the same x term on both sides.")
+            elif abs(l.c) > 1e-8:
+                st.info(f"The left expression has {'+' if l.c > 0 else '−'} {num(abs(l.c))}. Undo that first.")
             else:
-                st.info("Make the coefficient of x equal to 1. What operation undoes multiplication?")
+                st.info("What would make the coefficient in front of x equal to 1?")
 
-with right:
-    st.subheader("My Algebra Steps")
-    st.caption("Each line must be an equivalent equation.")
+    if mode == "Practice" and phase == "write":
+        if st.button("↶ Change my operation"):
+            st.session_state.pending = None
+            st.session_state.phase = "choose"
+            feedback("info", "Choose a different operation to apply to both sides.")
+            st.rerun()
+
+with work:
+    st.markdown("### My algebra steps")
+    st.caption("One line for each move. Every line should be equal to the one before it.")
     with st.container(border=True):
-        for note, line in st.session_state.lines:
-            st.markdown(f'<div class="step-line"><span class="step-note">{html.escape(note)}</span><br>{html.escape(line)}</div>', unsafe_allow_html=True)
-    with st.container(border=True):
-        st.markdown("**Our solving routine**")
-        st.write("1. Choose an inverse operation.")
-        st.write("2. Apply it to both sides.")
-        st.write("3. Write the new equation.")
-        st.write("4. Repeat, then verify.")
+        for i, (note, line) in enumerate(st.session_state.lines):
+            st.markdown(
+                f'<div class="work-line"><div class="note">{"START" if i == 0 else "STEP " + str(i)} · {html.escape(note)}</div>'
+                f'<div class="math">{html.escape(line)}</div></div>',
+                unsafe_allow_html=True)
+        if phase == "write":
+            st.caption("↓ Your next equation goes here.")
+    st.markdown(
+        '<div class="routine"><b>Our routine</b><br>'
+        '① Choose an inverse operation<br>'
+        '② Do it to <b>BOTH</b> sides<br>'
+        '③ Write the next equation<br>'
+        '④ Repeat and check</div>',
+        unsafe_allow_html=True)
 
 st.divider()
-st.caption("Teacher note: This first release saves progress only in the active Streamlit session. Names are not authenticated, and results are not yet a durable student record. Do not treat the mastery scores as secure until persistent storage and teacher access controls are added.")
+st.caption("Prototype: names are not authenticated, and progress lasts only for this browser session. A database and teacher dashboard will be needed before using mastery results as official student records.")
