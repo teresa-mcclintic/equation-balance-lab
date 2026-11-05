@@ -164,6 +164,7 @@ def fresh(level, mode, position=1):
     st.session_state.feedback = ("info", "Choose a useful inverse operation." if not p["simplify"] else "Distribute or combine like terms first.")
     st.session_state.problem_number = position
     st.session_state.step_count = 0
+    st.session_state.last_move = None
     st.session_state.mastery_clean = True
     st.session_state.hints_used = 0
     st.session_state.mastery_clean = True
@@ -366,8 +367,19 @@ with main:
         if isolated(l, r):
             st.session_state.phase = "verify"
             st.rerun()
-        st.markdown("### 1 · Choose your move")
-        st.write("What do you want to **undo** to get x alone?")
+        current_step = st.session_state.step_count + 1
+        st.markdown(f"### Step {current_step} · Choose your move")
+        if current_step > 1:
+            st.info("This is your NEW starting equation. Look at it and choose the next inverse operation.")
+        else:
+            st.write("What do you want to **undo** to get x alone?")
+        if mode == "Practice" and current_step > 1:
+            if abs(r.x) > 1e-8:
+                st.caption("Look for x terms on both sides. How could you put the x terms together?")
+            elif abs(l.c) > 1e-8:
+                st.caption("There is still a number added to or subtracted from the x term. What would undo it?")
+            elif abs(l.x - 1) > 1e-8:
+                st.caption("The x term still has a coefficient. What would make that coefficient 1?")
         with st.form("choose_operation"):
             oc1, oc2 = st.columns([1.1, 1])
             with oc1:
@@ -430,8 +442,13 @@ with main:
                                                    equation(expected_l, expected_r)))
                     st.session_state.step_count += 1
                     st.session_state.pending = None
-                    st.session_state.phase = "verify" if isolated(expected_l, expected_r) else "choose"
-                    feedback("success", "Yes! Both sides changed by the same operation. Your new line is balanced.")
+                    st.session_state.last_move = {
+                        "before": equation(l, r),
+                        "operation": operation_label,
+                        "after": equation(expected_l, expected_r)
+                    }
+                    st.session_state.phase = "verify" if isolated(expected_l, expected_r) else "transition"
+                    feedback("success", "Correct. You have written a new equivalent equation.")
                     st.rerun()
                 st.session_state.mastery_clean = False
                 if mode == "Practice" and a.close(expected_l):
@@ -443,6 +460,23 @@ with main:
             except (SyntaxError, ValueError, TypeError, ZeroDivisionError):
                 st.session_state.mastery_clean = False
                 feedback("error", "Type expressions like 3x, x, 15, or 2x − 4.")
+
+    elif phase == "transition":
+        last = st.session_state.last_move
+        next_step = st.session_state.step_count + 1
+        st.success("✓ Step complete! You kept the equation balanced.")
+        with st.container(border=True):
+            st.caption("YOUR PREVIOUS EQUATION")
+            st.markdown(f"#### {last['before']}")
+            st.caption(f"YOU APPLIED {last['operation']} TO BOTH SIDES")
+            st.markdown("↓")
+            st.caption("YOUR NEW EQUATION — THIS IS WHERE YOU START NEXT")
+            st.markdown(f"### :blue[{last['after']}]")
+        st.write("You are **not finished yet**. Look at the new equation and decide what to undo next.")
+        if st.button(f"Continue to Step {next_step} →", type="primary", use_container_width=True):
+            st.session_state.phase = "choose"
+            feedback("info", f"Step {next_step}: choose the next inverse operation for {last['after']}.")
+            st.rerun()
 
     elif phase == "verify":
         st.markdown("### 4 · Verify your answer")
@@ -526,12 +560,15 @@ with work:
                 unsafe_allow_html=True)
         if phase == "write":
             st.caption("↓ Your next equation goes here.")
+        elif phase == "transition":
+            st.caption("✓ New equation recorded. Use Continue to start the next step.")
     st.markdown(
         '<div class="routine"><b>Our routine</b><br>'
         '① Choose an inverse operation<br>'
         '② Do it to <b>BOTH</b> sides<br>'
         '③ Write the next equation<br>'
-        '④ Repeat and check</div>',
+        '④ Click <b>Continue to next step</b><br>'
+        '⑤ Repeat until x is alone; then check</div>',
         unsafe_allow_html=True)
 
 st.divider()
