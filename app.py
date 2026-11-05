@@ -364,9 +364,6 @@ with main:
                 feedback("error", "Enter expressions such as 3x + 6 and 18.")
 
     elif phase == "choose":
-        if isolated(l, r):
-            st.session_state.phase = "verify"
-            st.rerun()
         current_step = st.session_state.step_count + 1
         st.markdown(f"### Step {current_step} · Choose your move")
         if current_step > 1:
@@ -447,8 +444,24 @@ with main:
                         "operation": operation_label,
                         "after": equation(expected_l, expected_r)
                     }
-                    st.session_state.phase = "verify" if isolated(expected_l, expected_r) else "transition"
-                    feedback("success", "Correct. You have written a new equivalent equation.")
+                    if isolated(expected_l, expected_r):
+                        # The student has already written x = value. Don't ask for it twice.
+                        value = expected_r.c
+                        left_check = p["left"].x * value + p["left"].c
+                        right_check = p["right"].x * value + p["right"].c
+                        st.session_state.lines.append((
+                            "Verified in the original equation",
+                            f"{num(left_check)} = {num(right_check)}"
+                        ))
+                        st.session_state.phase = "complete"
+                        if mode == "Mastery Check" and st.session_state.mastery_clean:
+                            st.session_state.mastery_correct += 1
+                        elif mode == "Practice":
+                            st.session_state.practice_solved[level] += 1
+                        feedback("success", "You isolated x and the original equation balances.")
+                    else:
+                        st.session_state.phase = "transition"
+                        feedback("success", "Correct. You have written a new equivalent equation.")
                     st.rerun()
                 st.session_state.mastery_clean = False
                 if mode == "Practice" and a.close(expected_l):
@@ -478,31 +491,12 @@ with main:
             feedback("info", f"Step {next_step}: choose the next inverse operation for {last['after']}.")
             st.rerun()
 
-    elif phase == "verify":
-        st.markdown("### 4 · Verify your answer")
-        st.write("You've isolated x. Substitute its value into the **original equation** to prove it balances.")
-        with st.form("verify"):
-            value = st.number_input("x =", value=0.0, step=1.0, key="verify_input")
-            checked = st.form_submit_button("Check by substitution", type="primary")
-        if checked:
-            left_val = p["left"].x * value + p["left"].c
-            right_val = p["right"].x * value + p["right"].c
-            if abs(left_val - right_val) < 1e-7 and abs(value - p["solution"]) < 1e-7 and st.session_state.step_count > 0:
-                st.session_state.lines.append(("Check in original equation",
-                                               f"{num(left_val)} = {num(right_val)}"))
-                st.session_state.phase = "complete"
-                if mode == "Mastery Check" and st.session_state.mastery_clean:
-                    st.session_state.mastery_correct += 1
-                elif mode == "Practice":
-                    st.session_state.practice_solved[level] += 1
-                feedback("success", "Correct. Your substitution shows the two sides are equal.")
-                st.rerun()
-            else:
-                st.session_state.mastery_clean = False
-                feedback("error", "That number does not balance the original equation. Try again.")
-
     elif phase == "complete":
-        st.success("Equation solved and checked! Look at the sequence of algebra steps.")
+        st.success(f"Equation solved: x = {num(st.session_state.current_right.c)}")
+        left_check = p["left"].x * st.session_state.current_right.c + p["left"].c
+        right_check = p["right"].x * st.session_state.current_right.c + p["right"].c
+        st.write(f"Automatic check in the original equation: **{num(left_check)} = {num(right_check)}**")
+        st.caption("You've already written the solution. No need to enter it again.")
         if mode == "Mastery Check" and not st.session_state.mastery_clean:
             st.warning("You completed the equation with a correction, so this problem does not earn a mastery point.")
         label = "Next practice equation →" if mode == "Practice" else "Next mastery equation →"
@@ -527,14 +521,12 @@ with main:
     else:
         st.info(message)
 
-    if mode == "Practice" and phase in ("simplify", "choose", "write", "verify"):
+    if mode == "Practice" and phase in ("simplify", "choose", "write"):
         if st.button("Need a hint?"):
             if phase == "simplify":
                 st.info("Distribute to every term in the parentheses, then combine the x terms.")
             elif phase == "write":
                 st.info("Start with the left expression, apply the blue operation, simplify. Repeat separately on the right.")
-            elif phase == "verify":
-                st.info("Replace x in the original equation with the number you found.")
             elif abs(r.x) > 1e-8:
                 st.info("Try removing the x term from the right by subtracting the same x term on both sides.")
             elif abs(l.c) > 1e-8:
@@ -568,7 +560,7 @@ with work:
         '② Do it to <b>BOTH</b> sides<br>'
         '③ Write the resulting equation<br>'
         '④ Click <b>Continue to next step</b><br>'
-        '⑤ Repeat until x is alone; then check</div>',
+        '⑤ Repeat until x is alone; the app checks your answer</div>',
         unsafe_allow_html=True)
 
 st.divider()
